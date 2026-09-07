@@ -147,6 +147,7 @@ helm install prometheus-webhook-feishu helm/prometheus-webhook-feishu \
 - 建议设置 `sessionSecret` 固定值，避免 Pod 重启后登录会话失效。
 - 开启 Ingress：`--set ingress.enabled=true --set 'ingress.hosts[0].host=feishu.example.com'`。
 - 查看全部可配置项：`helm show values helm/prometheus-webhook-feishu`。
+- 修改配置建议使用 values 文件（嵌套的 `FEISHU_CARD_TEMPLATE` 用 `--set` 不便），升级：`helm upgrade prometheus-webhook-feishu helm/prometheus-webhook-feishu -f my-values.yaml`；卸载：`helm uninstall prometheus-webhook-feishu`。
 
 ## 配置 Alertmanager
 
