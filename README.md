@@ -40,6 +40,7 @@ go/
 │           └── alerts.html
 ├── Dockerfile            # 多阶段构建镜像
 ├── docker-compose.yml    # 编排文件
+├── helm/prometheus-webhook-feishu  # Helm chart（K8s 部署）
 ├── go.mod
 ├── config.example.json   # 配置示例
 ├── config.json           # 实际配置（需自行创建）
@@ -129,6 +130,23 @@ docker run -d -p 5000:5000 \
   --name prometheus-webhook-feishu \
   prometheus-webhook-feishu
 ```
+
+## Helm 部署（Kubernetes）
+
+```bash
+helm install prometheus-webhook-feishu helm/prometheus-webhook-feishu \
+  --set config.FEISHU_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/xxxx" \
+  --set config.PASSWORD="your-password"
+```
+
+说明：
+
+- 配置以 values 中的 `config` 为唯一来源，渲染为 ConfigMap 并经 initContainer 拷贝到可写区；管理后台在线保存的修改仅在本 Pod 生命周期内生效，重启后恢复为 chart 配置。
+- `helm upgrade` 修改 `config` 会触发 Pod 滚动重启以应用新配置。
+- 告警历史（alerts.json）保存在 emptyDir 中，Pod 重建后清空。
+- 建议设置 `sessionSecret` 固定值，避免 Pod 重启后登录会话失效。
+- 开启 Ingress：`--set ingress.enabled=true --set 'ingress.hosts[0].host=feishu.example.com'`。
+- 查看全部可配置项：`helm show values helm/prometheus-webhook-feishu`。
 
 ## 配置 Alertmanager
 
