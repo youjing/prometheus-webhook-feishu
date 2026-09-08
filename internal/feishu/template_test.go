@@ -85,6 +85,7 @@ func TestRenderString(t *testing.T) {
 	cases := []struct {
 		name, src, want string
 		ctx             *tmplCtx // 为 nil 时使用 ctx
+		values          map[string]string // 为 nil 时使用 values
 		wantErr         bool
 	}{
 		{name: "占位符替换", src: "{alertname}", want: "HighCPU"},
@@ -107,6 +108,15 @@ func TestRenderString(t *testing.T) {
 			ctx:  &tmplCtx{tmplAlert: tmplAlert{Labels: KV{"cluster": "other", "namespace": "x"}}},
 		},
 		{name: "模板与占位符混合", src: "{{ .Labels.severity }}/{alertname}", want: "warning/HighCPU"},
+		// 模板输出本身构成占位符形状文本时，占位符替换在模板渲染之后执行，
+		// 因此模板产出的 {instance} 也会被替换（先模板后占位符）。
+		{
+			name: "模板输出引入占位符形状文本",
+			src:  "{{ .Labels.name }} {alertname}",
+			want: "Y X",
+			ctx:  &tmplCtx{tmplAlert: tmplAlert{Labels: KV{"name": "{instance}"}}},
+			values: map[string]string{"alertname": "X", "instance": "Y"},
+		},
 		{name: "Firing 计数", src: "{{ .Alerts.Firing | len }}", want: "2"},
 		{name: "SortedPairs 遍历", src: "{{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }};{{ end }}", want: "alertname=HighCPU;cluster=prod-cluster;namespace=middleware;severity=warning;"},
 		{name: "toUpper", src: "{{ .Labels.severity | toUpper }}", want: "WARNING"},
@@ -120,7 +130,11 @@ func TestRenderString(t *testing.T) {
 			if c == nil {
 				c = ctx
 			}
-			got, err := renderString(tc.src, values, c)
+			v := tc.values
+			if v == nil {
+				v = values
+			}
+			got, err := renderString(tc.src, v, c)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("期望错误，实际得到 %q", got)
@@ -231,6 +245,37 @@ func TestBuildCard(t *testing.T) {
 	}
 	if c2 != "staging-cluster/A2" {
 		t.Fatalf("第二条 = %q, want staging-cluster/A2", c2)
+	}
+}
+
+// TestBuildCardNilLabels 验证告警与通知级标签均为 nil 时不 panic：
+// 模板中对 nil KV 的字段访问返回空字符串（走 else 分支输出 无cluster）。
+// 注意实际行为：values map 中 alertname 键恒存在（nil Labels 时值为 ""），
+// replacePlaceholders 对"键存在但值为空串"的情况会替换为空串，
+// 因此 {alertname} 最终被替换为 "" 而非原样保留。
+func TestBuildCardNilLabels(t *testing.T) {
+	cfg := newTestCfg(t)
+	cfg.SetTemplate(map[string]interface{}{
+		"card": map[string]interface{}{
+			"elements": []interface{}{
+				map[string]interface{}{
+					"tag": "div",
+					"text": map[string]interface{}{
+						"content": `{{ if .Labels.cluster }}{{ .Labels.cluster }}{{ else }}无cluster{{ end }}/{alertname}`,
+					},
+				},
+			},
+		},
+	})
+	payload := &WebhookPayload{Status: "firing", Alerts: []Alert{{Status: "firing"}}}
+	card, err := BuildCard(payload, cfg)
+	if err != nil {
+		t.Fatalf("BuildCard 错误: %v", err)
+	}
+	content := card["card"].(map[string]interface{})["elements"].([]interface{})[0].
+		(map[string]interface{})["text"].(map[string]interface{})["content"]
+	if content != "无cluster/" {
+		t.Fatalf("content = %q, want 无cluster/ （{alertname} 被替换为空串）", content)
 	}
 }
 
