@@ -1,0 +1,5 @@
+app
+docs
+deploy.md
+config.json
+*.tgz
