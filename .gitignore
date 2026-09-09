@@ -3,3 +3,4 @@ docs
 deploy.md
 config.json
 *.tgz
+helm/values-*.yaml
