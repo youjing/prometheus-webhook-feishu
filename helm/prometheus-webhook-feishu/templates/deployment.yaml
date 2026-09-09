@@ -28,6 +28,13 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["sh", "-c", "cp /chart-config/config.json /app-data/config.json"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           volumeMounts:
